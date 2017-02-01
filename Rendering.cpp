@@ -9,6 +9,10 @@
 
 namespace gg {
 
+void Rendering::addImage(float x, float y, Image const& image) {
+    imagePrims_.addLast({x, y, image});
+}
+
 struct PhysicalDeviceInfo {
     VkPhysicalDevice device = {};
     VkPhysicalDeviceMemoryProperties memoryProperties = {};
@@ -412,12 +416,12 @@ Rendering::Hub::PresentationSurface* Rendering::Hub::maintainPresentationSurface
     VkSwapchainCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     createInfo.surface = presentationSurface->surface;
-    createInfo.minImageCount = surfaceCapabilities.minImageCount;
+    createInfo.minImageCount = GG_COUNTOF(presentationSurface->swapchainImages);
     createInfo.imageFormat = presentationSurface->surfaceFormat.format;
     createInfo.imageColorSpace = presentationSurface->surfaceFormat.colorSpace;
     createInfo.imageExtent = surfaceCapabilities.currentExtent;
     createInfo.imageArrayLayers = 1;
-    createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    createInfo.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     createInfo.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
     createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
@@ -458,7 +462,7 @@ Rendering::ImageId Rendering::Hub::createImage(Span<uint8_t> const& data, Render
         createInfo.arrayLayers = 1;
         createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
         createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-        createInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        createInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;  // todo xfer_src here is only for temp debug display
         createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
@@ -671,12 +675,60 @@ void Rendering::Hub::submitRendering(Rendering&& rendering) {
         //vkCmdPipelineBarrier(graphicsCommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0, nullptr, 1, &imageBarrier);
     }
 
+    for (Rendering::ImagePrim imagePrim : rendering.imagePrims_) {
+        ImageResource const& imageResource = *imageResources_.fetch(imagePrim.imageId);
+        VkImageMemoryBarrier imageBarrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+        imageBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        imageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        imageBarrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        imageBarrier.srcQueueFamilyIndex = platform_->physical.graphicsQueueFamily;
+        imageBarrier.dstQueueFamilyIndex = platform_->physical.graphicsQueueFamily;
+        imageBarrier.image = imageResource.image;
+        imageBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+        vkCmdPipelineBarrier(
+            platform_->graphicsChannel.beginOrGetCurrentCommandBuffer(),
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &imageBarrier);
+
+        VkImageBlit region = {};
+        region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.srcOffsets[0] = {0,0,0};
+        region.srcOffsets[1] = {256,256,0};
+        region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.dstOffsets[0] = {0,0,0};
+        region.dstOffsets[1] = {256,256,0};
+        vkCmdBlitImage(graphicsCommandBuffer, imageResource.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, presentImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region, VK_FILTER_LINEAR);
+
+        imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        imageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        imageBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        imageBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageBarrier.srcQueueFamilyIndex = platform_->physical.graphicsQueueFamily;
+        imageBarrier.dstQueueFamilyIndex = platform_->physical.graphicsQueueFamily;
+        imageBarrier.image = imageResource.image;
+        imageBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+        vkCmdPipelineBarrier(
+            platform_->graphicsChannel.beginOrGetCurrentCommandBuffer(),
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &imageBarrier);
+    }
+
+
     // todo... actually render stuff
 
     if (presentImage) {
         VkImageMemoryBarrier imageBarrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
         imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;//VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        imageBarrier.dstAccessMask = 0;
+        imageBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
         imageBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;//VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         imageBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
         imageBarrier.srcQueueFamilyIndex = platform_->physical.graphicsQueueFamily;
@@ -686,7 +738,7 @@ void Rendering::Hub::submitRendering(Rendering&& rendering) {
 
         vkCmdPipelineBarrier(graphicsCommandBuffer,
             VK_PIPELINE_STAGE_TRANSFER_BIT,//VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &imageBarrier);
+            VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &imageBarrier);
     }
 
     platform.graphicsChannel.flush({&platform.renderingFinishedSemaphore, 1});

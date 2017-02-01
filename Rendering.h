@@ -46,8 +46,15 @@ private:
         SpriteId spriteId;
     };
 
+    struct ImagePrim {
+        float x;
+        float y;
+        ImageId imageId;
+    };
+
     Rendering& reset() {
         spritePrims_.removeAll();
+        imagePrims_.removeAll();
         antecedents_.removeAll();
         return *this;
     }
@@ -55,6 +62,7 @@ private:
     Hub* const hub_;
     PipelineId pipelineId_;
     Array<SpritePrim> spritePrims_;
+    Array<ImagePrim> imagePrims_;
     Array<Rendering*> antecedents_;
 };
 

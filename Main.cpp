@@ -76,6 +76,7 @@ int main(int argc, char* argv[]) {
         Timing timing;
         while (!window.isClosing()) {
             gg::Rendering rendering = renderingHub.startRendering(pipeline);
+            rendering.addImage(0.f, 0.f, image);
             renderingHub.submitRendering(std::move(rendering));
 
             timing.advanceFrame(os);
