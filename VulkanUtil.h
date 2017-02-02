@@ -137,9 +137,9 @@ struct DeferredDestructionFifo {
 
 class Channel {
 public:
-    void flush(Span<VkSemaphore const> signalSemaphores = {}) {
+    bool flush(Span<VkSemaphore const> signalSemaphores = {}) {
         if (currentCommandBuffer_ == nullptr) {
-            return;
+            return false;
         }
         vkEndCommandBuffer(currentCommandBuffer_);
         assert(waitDstStageMasks_.count() == waitSemaphores_.count());
@@ -151,7 +151,8 @@ public:
         submitInfo.pCommandBuffers = &currentCommandBuffer_;
         submitInfo.signalSemaphoreCount = signalSemaphores.count();
         submitInfo.pSignalSemaphores = signalSemaphores.begin();
-        vkQueueSubmit(*queue_, 1, &submitInfo, nextFence_);
+        VkResult result = vkQueueSubmit(*queue_, 1, &submitInfo, nextFence_);
+        assert(result == VK_SUCCESS);
 
         commandBuffers_.addLast(std::exchange(currentCommandBuffer_, nullptr));
         fences_.addLast(std::exchange(nextFence_, nullptr));
@@ -162,6 +163,8 @@ public:
         surfaceDestructionFifo_.endPhase();
         waitSemaphores_.removeAll();
         waitDstStageMasks_.removeAll();
+
+        return true;
     }
     VkCommandBuffer beginOrGetCurrentCommandBuffer() {
         if (currentCommandBuffer_ == nullptr) {

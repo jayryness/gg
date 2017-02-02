@@ -37,7 +37,7 @@ struct PhysicalDeviceInfo {
 
         {
             VkQueueFamilyProperties queueFamilyProps[8];
-            uint32_t queueFamilyCount = GG_COUNTOF(queueFamilyProps);
+            uint32_t queueFamilyCount = gg::CountOf(queueFamilyProps);
             vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilyProps);
             graphicsQueueFamily = gg::vk::FindQueueFamily(VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT, queueFamilyProps, queueFamilyCount);
             transferQueueFamily = gg::vk::FindQueueFamily(VK_QUEUE_TRANSFER_BIT, queueFamilyProps, queueFamilyCount);
@@ -65,13 +65,13 @@ struct Rendering::Hub::Platform {
     #ifdef GG_DEBUG
         char const* layers[] = { "VK_LAYER_LUNARG_standard_validation" };
         char const* extensions[] = { "VK_KHR_surface", "VK_KHR_win32_surface", "VK_EXT_debug_report" };
-        instanceInfo.enabledLayerCount = GG_COUNTOF(layers);
+        instanceInfo.enabledLayerCount = gg::CountOf(layers);
         instanceInfo.ppEnabledLayerNames = layers;
-        instanceInfo.enabledExtensionCount = GG_COUNTOF(extensions);
+        instanceInfo.enabledExtensionCount = gg::CountOf(extensions);
         instanceInfo.ppEnabledExtensionNames = extensions;
     #else
         char const* extensions[] = { "VK_KHR_surface", "VK_KHR_win32_surface" };
-        instanceInfo.enabledExtensionCount = GG_COUNTOF(extensions);
+        instanceInfo.enabledExtensionCount = gg::CountOf(extensions);
         instanceInfo.ppEnabledExtensionNames = extensions;
     #endif
 
@@ -105,15 +105,15 @@ struct Rendering::Hub::Platform {
 
         VkDeviceCreateInfo deviceCreateInfo = {};
         deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        deviceCreateInfo.queueCreateInfoCount = GG_COUNTOF(queueCreateInfos);
+        deviceCreateInfo.queueCreateInfoCount = gg::CountOf(queueCreateInfos);
         deviceCreateInfo.pQueueCreateInfos = queueCreateInfos;
     #ifdef GG_DEBUG
         char const* deviceLayers[] = { "VK_LAYER_LUNARG_standard_validation" };
-        deviceCreateInfo.enabledLayerCount = GG_COUNTOF(deviceLayers);
+        deviceCreateInfo.enabledLayerCount = gg::CountOf(deviceLayers);
         deviceCreateInfo.ppEnabledLayerNames = deviceLayers;
     #endif
         char const* deviceExtensions[] = { "VK_KHR_swapchain" };
-        deviceCreateInfo.enabledExtensionCount = GG_COUNTOF(deviceExtensions);
+        deviceCreateInfo.enabledExtensionCount = gg::CountOf(deviceExtensions);
         deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions;
 
         VkPhysicalDeviceFeatures features = {};
@@ -151,6 +151,7 @@ struct Rendering::Hub::Platform {
         }
     }
     ~Platform() {
+        vkDestroySemaphore(device, transfersFinishedSemaphore, nullptr);
         vkDestroySemaphore(device, renderingFinishedSemaphore, nullptr);
         if (presentImageAcquiredFence) {
             vkDestroyFence(device, presentImageAcquiredFence, nullptr);
@@ -172,6 +173,7 @@ struct Rendering::Hub::Platform {
     VkSemaphore presentImageAcquiredSemaphore = {};
     VkFence presentImageAcquiredFence = {};
     VkSemaphore renderingFinishedSemaphore = {};
+    VkSemaphore transfersFinishedSemaphore = {};
 
     struct StagingBuffer;
 };
@@ -243,6 +245,9 @@ struct Rendering::Hub::ImageResource : public Resource<ImageId> {
     gg::vk::MovableHandle<VkImage> image;
     gg::vk::MovableHandle<VkDeviceMemory> deviceMemory;
     gg::vk::MovableHandle<VkImageView> imageView;
+    unsigned width;
+    unsigned height;
+    VkFormat format;
 };
 
 struct Rendering::Hub::TilesetResource : public Resource<TilesetId> {
@@ -354,6 +359,7 @@ Rendering::PipelineId Rendering::Hub::createPipeline(WindowHandle displayWindow)
         {
             VkSemaphoreCreateInfo createInfo = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
             vkCreateSemaphore(platform.device, &createInfo, nullptr, &platform.renderingFinishedSemaphore);
+            vkCreateSemaphore(platform.device, &createInfo, nullptr, &platform.transfersFinishedSemaphore);
         }
 
         VkSurfaceCapabilitiesKHR surfaceCapabilities;
@@ -367,7 +373,7 @@ Rendering::PipelineId Rendering::Hub::createPipeline(WindowHandle displayWindow)
         };
 
         VkSurfaceFormatKHR formats[16];
-        uint32_t formatCount = GG_COUNTOF(formats);
+        uint32_t formatCount = gg::CountOf(formats);
         vkGetPhysicalDeviceSurfaceFormatsKHR(platform.physical.device, surface, &formatCount, formats);
 
         unsigned found = 0;
@@ -380,7 +386,7 @@ Rendering::PipelineId Rendering::Hub::createPipeline(WindowHandle displayWindow)
         assert(found < formatCount);
 
         VkPresentModeKHR presentModes[VK_PRESENT_MODE_RANGE_SIZE_KHR];
-        uint32_t presentModeCount = GG_COUNTOF(presentModes);
+        uint32_t presentModeCount = gg::CountOf(presentModes);
         vkGetPhysicalDeviceSurfacePresentModesKHR(platform.physical.device, surface, &presentModeCount, presentModes);
 
         presentationSurfaces_.add(std::move(displayWindow), {surface, {}, {{}, {}}, formats[found], {}});
@@ -416,7 +422,7 @@ Rendering::Hub::PresentationSurface* Rendering::Hub::maintainPresentationSurface
     VkSwapchainCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     createInfo.surface = presentationSurface->surface;
-    createInfo.minImageCount = GG_COUNTOF(presentationSurface->swapchainImages);
+    createInfo.minImageCount = gg::CountOf(presentationSurface->swapchainImages);
     createInfo.imageFormat = presentationSurface->surfaceFormat.format;
     createInfo.imageColorSpace = presentationSurface->surfaceFormat.colorSpace;
     createInfo.imageExtent = surfaceCapabilities.currentExtent;
@@ -440,9 +446,9 @@ Rendering::Hub::PresentationSurface* Rendering::Hub::maintainPresentationSurface
         platform_->graphicsChannel.flushAllSwapchains(platform_->device);
     }
 
-    uint32_t imageCount = GG_COUNTOF(presentationSurface->swapchainImages);
+    uint32_t imageCount = gg::CountOf(presentationSurface->swapchainImages);
     result = vkGetSwapchainImagesKHR(platform_->device, presentationSurface->swapchain, &imageCount, presentationSurface->swapchainImages);
-    assert(result == VK_SUCCESS && imageCount == GG_COUNTOF(presentationSurface->swapchainImages));
+    assert(result == VK_SUCCESS && imageCount == gg::CountOf(presentationSurface->swapchainImages));
 
     presentationSurface->extent = surfaceCapabilities.currentExtent;
     return presentationSurface;
@@ -451,12 +457,15 @@ Rendering::Hub::PresentationSurface* Rendering::Hub::maintainPresentationSurface
 Rendering::ImageId Rendering::Hub::createImage(Span<uint8_t> const& data, RenderFormat const& format, unsigned width, unsigned height) {
     ImageResource imageResource = {platform_->device, {}};
 
-    VkFormat vkformat = gg::vk::ConvertFormat(format);
+    imageResource.width = width;
+    imageResource.height = height;
+    imageResource.format = gg::vk::ConvertFormat(format);
+
     {
         VkImageCreateInfo createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         createInfo.imageType = VK_IMAGE_TYPE_2D;
-        createInfo.format = vkformat;
+        createInfo.format = imageResource.format;
         createInfo.extent = {width, height, 1};
         createInfo.mipLevels = 1;
         createInfo.arrayLayers = 1;
@@ -497,8 +506,8 @@ Rendering::ImageId Rendering::Hub::createImage(Span<uint8_t> const& data, Render
 
     {
         VkImageMemoryBarrier imageBarrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-        imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        imageBarrier.dstAccessMask = 0;
+        imageBarrier.srcAccessMask = 0;
+        imageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         imageBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         imageBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         imageBarrier.srcQueueFamilyIndex = platform_->physical.transferQueueFamily;
@@ -510,7 +519,7 @@ Rendering::ImageId Rendering::Hub::createImage(Span<uint8_t> const& data, Render
         vkCmdPipelineBarrier(
             transferCmdBuffer,
             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
             0,
             0, nullptr,
             0, nullptr,
@@ -521,6 +530,7 @@ Rendering::ImageId Rendering::Hub::createImage(Span<uint8_t> const& data, Render
         uint8_t* mappedData = nullptr;
         if (data.count()) {
             vkMapMemory(platform_->device, stagingBuffer.deviceMemory, 0, data.count(), 0, (void**)&mappedData);
+            memset(mappedData, -1, data.count());
 
             unsigned rowPitch = data.count() / height;
             for (unsigned y = 0; y < height; y++) {
@@ -530,33 +540,33 @@ Rendering::ImageId Rendering::Hub::createImage(Span<uint8_t> const& data, Render
             vkUnmapMemory(platform_->device, stagingBuffer.deviceMemory);
 
             VkBufferImageCopy region = {};
-            region.bufferRowLength = rowPitch;
+            region.bufferRowLength = width;
             region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             region.imageSubresource.layerCount = 1;
             region.imageExtent.width = width;
             region.imageExtent.height = height;
             region.imageExtent.depth = 1;
 
-            vkCmdCopyBufferToImage(transferCmdBuffer, stagingBuffer.buffer, imageResource.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+            vkCmdCopyBufferToImage(transferCmdBuffer, stagingBuffer.buffer, imageResource.image,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                1, &region);
             platform_->transferChannel.retireBuffer(std::exchange(stagingBuffer.buffer, {}), transferCmdBuffer);
             platform_->transferChannel.retireDeviceMemory(std::exchange(stagingBuffer.deviceMemory, {}), transferCmdBuffer);
         }
     }
     {
         VkImageMemoryBarrier imageBarrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-        imageBarrier.srcAccessMask = 0;
+        imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         imageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
         imageBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         imageBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         imageBarrier.srcQueueFamilyIndex = platform_->physical.transferQueueFamily;
         imageBarrier.dstQueueFamilyIndex = platform_->physical.graphicsQueueFamily;
         imageBarrier.image = imageResource.image;
-        imageBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        imageBarrier.subresourceRange.levelCount = 1;
-        imageBarrier.subresourceRange.layerCount = 1;
+        imageBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
         vkCmdPipelineBarrier(
             platform_->graphicsChannel.beginOrGetCurrentCommandBuffer(),
-            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
             VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
             0,
             0, nullptr,
@@ -568,11 +578,9 @@ Rendering::ImageId Rendering::Hub::createImage(Span<uint8_t> const& data, Render
         createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         createInfo.image = imageResource.image;
         createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        createInfo.format = vkformat;
+        createInfo.format = imageResource.format;
         createInfo.components = { VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY };
-        createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        createInfo.subresourceRange.levelCount = 1;
-        createInfo.subresourceRange.layerCount = 1;
+        createInfo.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
         VkResult result = vkCreateImageView(platform_->device, &createInfo, nullptr, &imageResource.imageView);
         assert(result == VK_SUCCESS);
     }
@@ -621,7 +629,10 @@ void Rendering::Hub::destroyTileset(TilesetId id) {
 }
 
 void Rendering::Hub::submitQueuedUploads() {
-    platform_->transferChannel.flush();
+    Platform& platform = *platform_;
+    if (platform.transferChannel.flush({&platform.transfersFinishedSemaphore, 1})) {
+        platform.graphicsChannel.addWaitSemaphore(platform.transfersFinishedSemaphore, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+    }
 }
 
 Rendering Rendering::Hub::startRendering(PipelineId pipelineId) {
@@ -663,67 +674,23 @@ void Rendering::Hub::submitRendering(Rendering&& rendering) {
         imageBarrier.image = presentationSurface->swapchainImages[presentationSurface->acquiredImageIndex];
         imageBarrier.subresourceRange = subresourceRange;
 
-        VkClearColorValue clearColor = {1.f, rand() / (float)RAND_MAX, 1.f, 1.f};
+        VkClearColorValue clearColor = {0.f, 0.f, 0.f, 1.f};
         vkCmdPipelineBarrier(graphicsCommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &imageBarrier);
         vkCmdClearColorImage(graphicsCommandBuffer, presentImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &subresourceRange);
-
-        //imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        //imageBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        //imageBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        //imageBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        //
-        //vkCmdPipelineBarrier(graphicsCommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0, nullptr, 1, &imageBarrier);
     }
 
+    // todo render these properly
     for (Rendering::ImagePrim imagePrim : rendering.imagePrims_) {
         ImageResource const& imageResource = *imageResources_.fetch(imagePrim.imageId);
-        VkImageMemoryBarrier imageBarrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-        imageBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        imageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        imageBarrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-        imageBarrier.srcQueueFamilyIndex = platform_->physical.graphicsQueueFamily;
-        imageBarrier.dstQueueFamilyIndex = platform_->physical.graphicsQueueFamily;
-        imageBarrier.image = imageResource.image;
-        imageBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-        vkCmdPipelineBarrier(
-            platform_->graphicsChannel.beginOrGetCurrentCommandBuffer(),
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            VK_PIPELINE_STAGE_TRANSFER_BIT,
-            0,
-            0, nullptr,
-            0, nullptr,
-            1, &imageBarrier);
-
         VkImageBlit region = {};
         region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
         region.srcOffsets[0] = {0,0,0};
-        region.srcOffsets[1] = {256,256,0};
+        region.srcOffsets[1] = {(int)imageResource.width,(int)imageResource.height,1};
         region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        region.dstOffsets[0] = {0,0,0};
-        region.dstOffsets[1] = {256,256,0};
-        vkCmdBlitImage(graphicsCommandBuffer, imageResource.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, presentImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region, VK_FILTER_LINEAR);
-
-        imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        imageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        imageBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-        imageBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageBarrier.srcQueueFamilyIndex = platform_->physical.graphicsQueueFamily;
-        imageBarrier.dstQueueFamilyIndex = platform_->physical.graphicsQueueFamily;
-        imageBarrier.image = imageResource.image;
-        imageBarrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-        vkCmdPipelineBarrier(
-            platform_->graphicsChannel.beginOrGetCurrentCommandBuffer(),
-            VK_PIPELINE_STAGE_TRANSFER_BIT,
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            0,
-            0, nullptr,
-            0, nullptr,
-            1, &imageBarrier);
+        region.dstOffsets[0] = {(int)imagePrim.x,(int)imagePrim.y,0};
+        region.dstOffsets[1] = {(int)(imagePrim.x+imageResource.width),(int)(imagePrim.y+imageResource.height),1};
+        vkCmdBlitImage(graphicsCommandBuffer, imageResource.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, presentImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region, VK_FILTER_LINEAR);
     }
-
-
-    // todo... actually render stuff
 
     if (presentImage) {
         VkImageMemoryBarrier imageBarrier = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
@@ -741,13 +708,10 @@ void Rendering::Hub::submitRendering(Rendering&& rendering) {
             VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &imageBarrier);
     }
 
-    platform.graphicsChannel.flush({&platform.renderingFinishedSemaphore, 1});
+    platform.graphicsChannel.flush();
 
     if (presentImage) {
-        // todo is renderingFinishedSemaphore really needed here? online discussion is confusing on this point
         VkPresentInfoKHR presentInfo = {VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
-        presentInfo.waitSemaphoreCount = 1;
-        presentInfo.pWaitSemaphores = &platform.renderingFinishedSemaphore;
         presentInfo.swapchainCount = 1;
         presentInfo.pSwapchains = &presentationSurface->swapchain;
         presentInfo.pImageIndices = &presentationSurface->acquiredImageIndex;

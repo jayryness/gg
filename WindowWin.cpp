@@ -110,16 +110,8 @@ long long Window::windowProc(unsigned msg, unsigned long long wParam, long long 
             PostQuitMessage(0);
             break;
 
-        //case WM_PAINT:
-        //{
-        //    PAINTSTRUCT ps; 
-        //    HDC hdc = BeginPaint(hwnd, &ps);
-        //    RECT cr;
-        //    GetClientRect(hwnd, &cr);
-        //    FillRect(hdc, &cr, (HBRUSH)GetStockObject(BLACK_BRUSH));
-        //    EndPaint(hwnd, &ps);
-        //    break;
-        //}
+        case WM_PAINT:
+            break;
 
         case WM_SYSCOMMAND:
             if (wParam == SC_MAXIMIZE) {

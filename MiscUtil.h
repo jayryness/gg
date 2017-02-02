@@ -15,8 +15,6 @@
 #define GG_SCOPE_EXIT(code) \
     auto GG_TOKEN_EVAL_CAT(scope_exit_, __LINE__) = gg::Internal::MakeScopeExit([&](){code;})
 
-#define GG_COUNTOF(a) (sizeof(a) / sizeof(*a))
-
 #if defined(_MSC_VER)
 
 #include "MiscUtilWin.inl"
@@ -28,6 +26,11 @@
 #endif
 
 namespace gg {
+
+template<class T, unsigned N>
+constexpr unsigned CountOf(T (&)[N]) {
+    return N;
+}
 
 unsigned CountLeadingZeroBits(uint32_t bits);
 unsigned CountLeadingZeroBits(uint64_t bits);
