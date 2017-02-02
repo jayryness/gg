@@ -12,8 +12,13 @@ T Lerp(T y0, T y1, T x) {
 }
 
 template<class T>
+T Clamp(T x, T low, T high) {
+    return std::min(std::max(low, x), high);
+}
+
+template<class T>
 T Saturate(T x) {
-    return std::min(std::max(T(0), x), T(1));
+    return Clamp(x, T(0), T(1));
 }
 
 }

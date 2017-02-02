@@ -80,6 +80,10 @@ int main(int argc, char* argv[]) {
         unsigned frames = 0;
         Timing timing;
         while (!window.isClosing()) {
+            bool resized = os.GetClientSize(window.hwnd(), width, height);
+            x = gg::Clamp(x, 0.f, (float)(width - 8));
+            y = gg::Clamp(y, 0.f, (float)(height - 8));
+
             gg::Rendering rendering = renderingHub.startRendering(pipeline);
             /*if (frames & 1) */rendering.addImage(x, y, image);
             renderingHub.submitRendering(std::move(rendering));
@@ -88,7 +92,6 @@ int main(int argc, char* argv[]) {
 
             frames++;
 
-            bool resized = os.GetClientSize(window.hwnd(), width, height);
             dx *= ((0 < x+dx) && (x+8+dx < width)) ? 1.f : -1.f;
             dy *= ((0 < y+dy) && (y+8+dy < height)) ? 1.f : -1.f;
             x += dx;

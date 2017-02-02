@@ -110,9 +110,6 @@ long long Window::windowProc(unsigned msg, unsigned long long wParam, long long 
             PostQuitMessage(0);
             break;
 
-        case WM_PAINT:
-            break;
-
         case WM_SYSCOMMAND:
             if (wParam == SC_MAXIMIZE) {
                 RECT wr;
