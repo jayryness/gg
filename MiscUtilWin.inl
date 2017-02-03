@@ -7,13 +7,13 @@ namespace gg {
 inline unsigned CountLeadingZeroBits(uint32_t bits) {
     //return __lzcnt(bits);
     unsigned long count;
-    return _BitScanReverse(&count, bits) == 0 ? 32 : 31 - count;
+    return 31 - (_BitScanReverse(&count, bits) == 0 ? -1 : count);
 }
 
 inline unsigned CountLeadingZeroBits(uint64_t bits) {
     //return (unsigned)__lzcnt64(bits);
     unsigned long count;
-    return _BitScanReverse64(&count, bits) == 0 ? 64 : 63 - count;
+    return 63 - (_BitScanReverse64(&count, bits) == 0 ? -1 : count);
 }
 
 inline unsigned CountNonzeroBits(uint32_t bits) {
