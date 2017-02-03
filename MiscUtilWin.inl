@@ -5,11 +5,15 @@
 namespace gg {
 
 inline unsigned CountLeadingZeroBits(uint32_t bits) {
-    return __lzcnt(bits);
+    //return __lzcnt(bits);
+    unsigned long count;
+    return _BitScanReverse(&count, bits) == 0 ? 32 : 31 - count;
 }
 
 inline unsigned CountLeadingZeroBits(uint64_t bits) {
-    return (unsigned)__lzcnt64(bits);
+    //return (unsigned)__lzcnt64(bits);
+    unsigned long count;
+    return _BitScanReverse64(&count, bits) == 0 ? 64 : 63 - count;
 }
 
 inline unsigned CountNonzeroBits(uint32_t bits) {
