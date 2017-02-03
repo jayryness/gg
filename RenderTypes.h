@@ -2,6 +2,8 @@
 #ifndef GG_RENDERTYPES_H
 #define GG_RENDERTYPES_H
 
+#include "Array.h"
+
 namespace gg {
 
 struct RenderFormat {
@@ -61,6 +63,20 @@ struct RenderFormat {
     BitDepth bitDepth;
     Type type;
 };
+
+struct PipelineDefinition {
+    static PipelineDefinition LoadFromFiles(char const* vertexFilename, char const* fragmentFilename);
+    struct Stage {
+        gg::Array<int8_t> shaderBytecode;
+    };
+    Stage vertexStage;
+    Stage fragmentStage;
+    uint32_t hash;
+};
+
+inline uint32_t Hash32(PipelineDefinition const& pipelineDef) {
+    return pipelineDef.hash;
+}
 
 }
 

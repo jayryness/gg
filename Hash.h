@@ -47,6 +47,13 @@ inline uint32_t Hash32(T* x) {
     return MixBits32((intptr_t)x);
 }
 
+inline uint32_t CombineHash32(uint32_t a, uint32_t b) {
+    uint32_t result = a;
+    result ^= b + 0x9e3779b9 + (a << 6) + (a >> 2);   // from boost... can we do better? todo
+    return result;
+}
+
+uint32_t BufferHash32(void const* buffer , size_t size, uint32_t seed = 0xdecafbad);
 uint32_t StringHash32(char const* str, uint32_t seed = 0xdecafbad);
 
 struct HashedString {
@@ -72,10 +79,11 @@ struct HashedString {
     char const* chars;
 };
 
-GG_NO_INLINE inline uint32_t StringHash32(char const* data, uint32_t seed) {
+GG_NO_INLINE inline uint32_t BufferHash32(void const* buffer, size_t size, uint32_t seed) {
     // Murmurhash3 with cheaper final mixing
 
-    unsigned const length = (unsigned)strlen(data);
+    int8_t const*const data = (int8_t*)buffer;
+    unsigned const length = (unsigned)size;
     int const blockCount = length / 4;
 
     uint32_t h1 = seed;
@@ -112,6 +120,9 @@ GG_NO_INLINE inline uint32_t StringHash32(char const* data, uint32_t seed) {
     return MixBits32(h1 ^ length);
 }
 
+inline uint32_t StringHash32(char const* data, uint32_t seed) {
+    return BufferHash32(data, strlen(data), seed);
+}
 
 }
 

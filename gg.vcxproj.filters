@@ -13,6 +13,7 @@
     <ClCompile Include="WindowWin.cpp">
       <Filter>Win</Filter>
     </ClCompile>
+    <ClCompile Include="RenderTypes.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Window.h" />
@@ -33,6 +34,12 @@
       <Filter>Vulkan</Filter>
     </ClInclude>
     <ClInclude Include="RenderTypes.h" />
+    <ClInclude Include="Sprite.hlsl">
+      <Filter>Shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="Shaders.hxx">
+      <Filter>Shaders</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Win">
@@ -40,6 +47,9 @@
     </Filter>
     <Filter Include="Vulkan">
       <UniqueIdentifier>{12c3d74e-7242-49c9-938e-46948966f7f1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shaders">
+      <UniqueIdentifier>{9c72e1b0-2e32-481a-9df6-1957bba1d472}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

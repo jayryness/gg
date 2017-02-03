@@ -225,8 +225,16 @@ struct Rendering::Hub::PipelineResource : public Resource<PipelineId> {
     PipelineResource() = default;
     PipelineResource(PipelineResource&&) = default;
     ~PipelineResource() {
+        if (fragmentShader) {
+            vkDestroyShaderModule(device, fragmentShader, nullptr);
+        }
+        if (vertexShader) {
+            vkDestroyShaderModule(device, vertexShader, nullptr);
+        }
     }
 
+    gg::vk::MovableHandle<VkShaderModule> vertexShader;
+    gg::vk::MovableHandle<VkShaderModule> fragmentShader;
     WindowHandle displayWindow;
 };
 
@@ -314,7 +322,7 @@ Rendering::Hub::~Hub() {
     }
 }
 
-Rendering::PipelineId Rendering::Hub::createPipeline(WindowHandle displayWindow) {
+Rendering::PipelineId Rendering::Hub::createPipeline(PipelineDefinition const& definition, WindowHandle displayWindow) {
     Platform& platform = *platform_;
     VkDevice const device = platform.device;
     if (presentationSurfaces_.count() && presentationSurfaces_.find(displayWindow)) {
@@ -323,6 +331,18 @@ Rendering::PipelineId Rendering::Hub::createPipeline(WindowHandle displayWindow)
     }
 
     PipelineResource pipelineResource = {device, {}};
+
+    {
+        VkShaderModuleCreateInfo createInfo = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+        createInfo.codeSize = definition.vertexStage.shaderBytecode.count();
+        createInfo.pCode = (uint32_t const*)definition.vertexStage.shaderBytecode.begin();
+        VkResult result = vkCreateShaderModule(device, &createInfo, nullptr, &pipelineResource.vertexShader);
+        assert(result == VK_SUCCESS);
+        createInfo.codeSize = definition.fragmentStage.shaderBytecode.count();
+        createInfo.pCode = (uint32_t const*)definition.fragmentStage.shaderBytecode.begin();
+        result = vkCreateShaderModule(device, &createInfo, nullptr, &pipelineResource.fragmentShader);
+        assert(result == VK_SUCCESS);
+    }
 
     {
         VkExtent2D extent;

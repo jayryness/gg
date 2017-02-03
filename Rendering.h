@@ -78,7 +78,7 @@ public:
     Rendering startRendering(PipelineId pipelineId);
     void submitRendering(Rendering&& rendering);
 
-    PipelineId createPipeline(WindowHandle displayWindow);
+    PipelineId createPipeline(PipelineDefinition const& definition, WindowHandle displayWindow);
     ImageId createImage(Span<uint8_t> const& data, RenderFormat const& format, unsigned width, unsigned height);
     TilesetId createTileset(Span<uint8_t> const& data, RenderFormat const& format, unsigned width, unsigned height, unsigned tileWidth, unsigned tileHeight);
 
@@ -131,8 +131,8 @@ protected:
 };
 
 struct Rendering::Pipeline : Rendering::IdOwner<PipelineId, &Hub::destroyPipeline> {
-    Pipeline(Hub* hub, void* displayWindow)
-        : IdOwner(hub, hub->createPipeline(displayWindow)) {
+    Pipeline(Hub* hub, PipelineDefinition const& definition, void* displayWindow)
+        : IdOwner(hub, hub->createPipeline(definition, displayWindow)) {
     }
 };
 
